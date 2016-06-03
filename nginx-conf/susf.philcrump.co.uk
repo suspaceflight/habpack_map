@@ -1,0 +1,35 @@
+map $http_upgrade $connection_upgrade {  
+    default upgrade;  
+    ''      close;  
+}  
+upstream socksusf {  
+    server 127.0.0.1:3000;  
+}  
+server {  
+    listen 80 default;  
+    
+    access_log off;  
+    error_log off;  
+    
+    index index.html;  
+  
+    location / {  
+        root /srv/susf;  
+    }  
+  
+    location /socket {  
+        proxy_pass http://socksusf/socket.io;  
+        proxy_set_header X-Real-IP $remote_addr;  
+        proxy_set_header Host $host; 
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  
+        proxy_http_version 1.1;  
+        proxy_set_header Upgrade $http_upgrade;  
+        proxy_set_header Connection $connection_upgrade;  
+    }  
+
+    location /tracker/get_predictions.php {
+        proxy_pass http://spacenear.us;
+        proxy_set_header Host $host;
+        proxy_set_header Host $host;
+    }
+}
