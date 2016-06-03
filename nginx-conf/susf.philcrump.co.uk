@@ -11,10 +11,9 @@ server {
     access_log off;  
     error_log off;  
     
-    index index.html;  
-  
     location / {  
-        root /srv/susf;  
+        root /srv/susf;
+        index index.html;
     }  
   
     location /socket {  
@@ -30,6 +29,6 @@ server {
     location /tracker/get_predictions.php {
         proxy_pass http://spacenear.us;
         proxy_set_header Host $host;
-        proxy_set_header Host $host;
+        proxy_http_version 1.1;
     }
 }
