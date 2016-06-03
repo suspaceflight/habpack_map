@@ -84,8 +84,6 @@ html, body, #map {
 }
 </style>
 </head>
-<script src="static/socket.io-1.4.5.js"></script>
-<script src="static/leaflet/leaflet.js"></script>
 <body>
     <div id="map"></div>
     <div id="box-status" class="box" style="display: none;">
@@ -100,6 +98,10 @@ html, body, #map {
     </div>
     <div id="box-payloads" class="box" style="display: none;"></div>
 </body>
+<script src="static/socket.io-1.4.5.js"></script>
+<script src="static/leaflet/leaflet.js"></script>
+<script src="static/pouchdb-5.3.2.min.js"></script>
+<script src="static/L.TileLayer.PouchDBCached.js"></script>
 <script>
 /** CHANGE THIS: **/
 var prediction_vehicle = "NOTAFLIGHT";
@@ -141,7 +143,7 @@ var prediction_red_landing = L.icon({
 });
 
 var map = L.map('map', { center: [50.939, -1.388], zoom: 14 });
-L.tileLayer('https://a.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+L.tileLayer('https://a.tile.openstreetmap.org/{z}/{x}/{y}.png', { useCache: true }).addTo(map);
 
 function mobilecheck() 
 {
