@@ -1,0 +1,12 @@
+CACHE MANIFEST
+# 00001
+/static/leaflet/leaflet.css
+/static/leaflet/leaflet.js
+/static/socket.io-1.4.5.js
+/static/images/balloon-red.png
+/static/images/balloon-shadow.png
+/static/images/balloon-pop.png
+/static/images/target-red.png
+
+NETWORK:
+*
