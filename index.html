@@ -117,6 +117,7 @@ var pageStarting = true;
 var stored_history = [];
 var stored_prediction;
 var last_ascent_rate = 0;
+var tracker0_following = false;
 
 var red_balloon = L.icon({
     iconUrl: 'static/images/balloon-red.png',
@@ -199,12 +200,20 @@ socket.on('full_history', function (data) {
         });
         map.panTo([(stored_history[(stored_history.length-1)][3]/10000000),(stored_history[(stored_history.length-1)][4]/10000000)]);
     }
+    else if(tracker0_following)
+    {
+        map.panTo([(stored_history[(stored_history.length-1)][3]/10000000),(stored_history[(stored_history.length-1)][4]/10000000)]);
+    }
 });
 
 socket.on('partial_history', function (data) {
     //console.log(data);
     stored_history = stored_history.concat(data.history);
     process_history();
+    if(tracker0_following)
+    {
+        map.panTo([(stored_history[(stored_history.length-1)][3]/10000000),(stored_history[(stored_history.length-1)][4]/10000000)]);
+    }
 });
 
 if(stored_history.length==0)
@@ -298,7 +307,8 @@ function describeNewData(point_data, previous_point_data)
     html += '<b>Altitude:</b> '  + Number(point_data[5]).toFixed(1) + ' m ('+(ascentRate<=0?'':'+') + ascentRate.toFixed(1)+' m/s)<br>';
     html += '<b>Satellites:</b> '  + point_data[6]+'<br>';
     html += '<b>Uplink Count:</b> '  + point_data[7]+'<br>';
-    html += '<a id="tracker0_panbtn" class="pseudoHref">Pan To</a>'
+    html += '<a id="tracker0_panbtn" class="pseudoHref">Pan To</a><br>';
+    html += '<a id="tracker0_followbtn" class="pseudoHref">Follow</a>';
     html += "</p>";
 
     container.innerHTML = html;
@@ -306,6 +316,24 @@ function describeNewData(point_data, previous_point_data)
     document.getElementById("tracker0_panbtn").addEventListener('click', function()
     {
         map.panTo([(point_data[3]/10000000),(point_data[4]/10000000)]);
+    });
+
+    document.getElementById("tracker0_followbtn").addEventListener('click', function()
+    {
+        if(tracker0_following)
+        {
+            tracker0_following = false;
+            document.getElementById("tracker0_followbtn").textContent = "Follow";
+            document.getElementById("tracker0_followbtn").style.fontWeight = '';
+            document.getElementById("tracker0_followbtn").style.fontStyle = '';
+        }
+        else
+        {
+            tracker0_following = true;
+            document.getElementById("tracker0_followbtn").textContent = "Following";
+            document.getElementById("tracker0_followbtn").style.fontWeight = 'bold';
+            document.getElementById("tracker0_followbtn").style.fontStyle = 'italic';
+        }
     });
 }
 
