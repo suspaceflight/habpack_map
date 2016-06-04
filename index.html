@@ -157,6 +157,7 @@ if(mobilecheck()) {
     document.getElementById("box-status").style.display = 'none';
     document.getElementById("box-mobile-status").style.display = '';
     document.getElementById("box-payloads").style.display = 'none';
+    tracker0_following = true;
 }
 else
 {
@@ -317,6 +318,13 @@ function describeNewData(point_data, previous_point_data)
     {
         map.panTo([(point_data[3]/10000000),(point_data[4]/10000000)]);
     });
+
+    if(tracker0_following)
+    {
+        document.getElementById("tracker0_followbtn").textContent = "Following";
+        document.getElementById("tracker0_followbtn").style.fontWeight = 'bold';
+        document.getElementById("tracker0_followbtn").style.fontStyle = 'italic';
+    }
 
     document.getElementById("tracker0_followbtn").addEventListener('click', function()
     {
