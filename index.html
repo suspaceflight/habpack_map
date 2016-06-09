@@ -104,7 +104,7 @@ html, body, #map {
 <script src="static/L.TileLayer.PouchDBCached.js"></script>
 <script>
 /** CHANGE THIS: **/
-var prediction_vehicle = "NOTAFLIGHT";
+var prediction_vehicle = "SFSU";
 var payload_path;
 var payload_position;
 var prediction_path;
@@ -115,6 +115,8 @@ var path_latlngs = [];
 var pageStarting = true;
 
 var stored_history = [];
+var stored_date;
+var stored_callsign;
 var stored_prediction;
 var last_ascent_rate = 0;
 var tracker0_following = false;
@@ -144,7 +146,7 @@ var prediction_red_landing = L.icon({
 });
 
 var map = L.map('map', { center: [50.939, -1.388], zoom: 14 });
-L.tileLayer('https://a.tile.openstreetmap.org/{z}/{x}/{y}.png', { useCache: true }).addTo(map);
+L.tileLayer('https://a.tile.openstreetmap.org/{z}/{x}/{y}.png', { minZoom: 2, maxZoom: 19, useCache: true }).addTo(map);
 
 function mobilecheck() 
 {
@@ -184,14 +186,20 @@ document.getElementById("mobile-expand").addEventListener('click', function()
 });
 
 if (typeof(Storage) !== "undefined") {
-    if (localStorage.history) {
+    if (localStorage.callsign!="undefined") {
+        console.log("Local Storage found");
+        stored_callsign = JSON.parse(localStorage.callsign);
+        stored_date = JSON.parse(localStorage.date);
         stored_history = JSON.parse(localStorage.history);
     }
 }
 
 var socket = io('https://susf.philcrump.co.uk', {path: "/socket"});
 socket.on('full_history', function (data) {
-    //console.log(data);
+    console.log("Full History received, Date: "+data.date);
+
+    stored_date = data.date;
+    stored_callsign = data.callsign;
     stored_history = data.history;
     process_history();
     if(pageStarting) {
@@ -208,7 +216,14 @@ socket.on('full_history', function (data) {
 });
 
 socket.on('partial_history', function (data) {
-    //console.log(data);
+    console.log("Partial History received, Date: "+data.date);
+    
+    if(data.callsign!=stored_callsign || data.date!=stored_date)
+    {
+        console.log("Partial History doesn't match stored data, refreshing..");
+        socket.emit('history_full');
+        return;
+    }
     stored_history = stored_history.concat(data.history);
     process_history();
     if(tracker0_following)
@@ -254,6 +269,8 @@ function process_history()
     }
     if (typeof(Storage) !== "undefined") {
         localStorage.history = JSON.stringify(stored_history);
+        localStorage.callsign = JSON.stringify(stored_callsign);
+        localStorage.date = JSON.stringify(stored_date);
     }
 }
 
@@ -293,7 +310,7 @@ function describeNewData(point_data, previous_point_data)
             document.getElementById("box-payloads").appendChild(container);
         }
     var point_date = new Date(point_data[0]*1000);
-    var html = "<h3>SUSF</h3>"
+    var html = "<h3>SFSU</h3>"
         + '<p style="font-size: 10pt;">'
         + "<b>Time:</b> " + point_date.toLocaleDateString() + " " + point_date.toLocaleTimeString() + "<br>"
         + "<b>Position:</b> " + Math.round(point_data[3]/100)/100000 + ", " + Math.round(point_data[4]/100)/100000 + "<br>";

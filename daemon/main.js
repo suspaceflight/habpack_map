@@ -2,9 +2,11 @@ var http = require('http');
 var io = require('socket.io')(3000);
 var msgpack = require('msgpack');
 
+//var payload_id = "8d79cfdd19c844b7793d5bab624b7e10";
+var payload_id = "af8ad89b61635db9615f5e2674e0a318";
 // CHANGE THIS FOR FLIGHT DAY
-var habitat_interval = 30; // seconds
-var days_history = 40;
+var habitat_interval = 1; // seconds
+var days_history = 5;
 //var habitat_test_options = {
 //  host: 'habitat.habhub.org',
 //  path: '/habitat/_design/payload_telemetry/_view/payload_time?startkey=[%228d79cfdd19c844b7793d5bab624b7e10%22,[]]&endkey=[%228d79cfdd19c844b7793d5bab624b7e10%22]&include_docs=True&descending=True'
@@ -56,6 +58,7 @@ function habpack_decode(habitat_key,habpack_base64) {
     var battery_mv = hb_string[40];
     var uplink_num = hb_string[50];
     
+    payload_callsign = callsign;
     var output = {callsign: callsign, data: []};
     output.data.push(
             [
@@ -102,7 +105,7 @@ io.on('connection', function (socket) {
     socket.on('history_full', function()
     {
         console.log('Request for all history.');
-        socket.emit('full_history', {history: payload_data});
+        socket.emit('full_history', {callsign: payload_callsign, date: startup_date, history: payload_data});
     });
 
     socket.on('history_since', function (data) {
@@ -111,7 +114,7 @@ io.on('connection', function (socket) {
             return (item[0] > data.latest_key);
         }
         console.log('Request for partial history.');
-        socket.emit('partial_history', {history: payload_data.filter(filterKey)});
+        socket.emit('partial_history', {callsign: payload_callsign, date: startup_date, history: payload_data.filter(filterKey)});
     });
 });
 
@@ -145,7 +148,6 @@ function habitat_http_sync(cb) {
         http.request(habitat_http_options, habitat_http_callback).end();
 }
 
-var payload_id = "8d79cfdd19c844b7793d5bab624b7e10";
 var latest_key = 0;
 var habitat_http_options;
 var habitat_http_busy = 0;
@@ -184,4 +186,6 @@ setInterval(function()
     }
 },habitat_interval*1000);
 
+startup_date = Date.now();
+var payload_callsign = "";
 console.log("HABpack map daemon - standing by.");
