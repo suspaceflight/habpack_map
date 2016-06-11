@@ -186,7 +186,7 @@ document.getElementById("mobile-expand").addEventListener('click', function()
 });
 
 if (typeof(Storage) !== "undefined") {
-    if (localStorage.callsign!="undefined") {
+    if (typeof(localStorage.callsign)!="undefined" && localStorage.callsign!="undefined") {
         console.log("Local Storage found");
         stored_callsign = JSON.parse(localStorage.callsign);
         stored_date = JSON.parse(localStorage.date);
