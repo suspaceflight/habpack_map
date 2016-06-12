@@ -250,27 +250,61 @@ else
     }
 }
 
+var markerAnimationInterval = 200;
+var markerAnimationTimer;
+var markerAnimationIndex;
+
+function markerAnimationCallback()
+{
+    appendPathPoint(stored_history[history_length-markerAnimationIndex]);
+    drawNewPosition(stored_history[(history_length-markerAnimationIndex)]);
+    if(markerAnimationIndex==1)
+    {
+        clearInterval(markerAnimationTimer);
+    }
+    markerAnimationIndex--;
+}
+
 function process_history()
 {
     var history_length = stored_history.length;
     console.log('Processing '+history_length+' rows of data');
     if(history_length>0)
     {
-        drawNewPath(stored_history);
         var latest_point = stored_history[(history_length-1)];
-        drawNewPosition(latest_point);
-        current_ts = latest_point[0];
+        /* Find length of last packet */
         var i=1;
-        while(current_ts == stored_history[(history_length-i)][0] && i<(history_length-1))
+        while(latest_point[0] == stored_history[(history_length-i)][0] && i<(history_length-1))
         {
             i++;
         }
+        /* Cancel running Animation Timer if any */
+        if(markerAnimationTimer)
+        {
+            clearInterval(markerAnimationTimer);
+        }
+        /* Check time since last position */
+        //if((new Date())-(latest_point[0]*1000)<(20*1000))
+        if(1) //TODO: Remove for flight.
+        {
+            /* It's recent, animate the past packet! */
+            drawNewPath(stored_history.slice(0,history_length-i));
+            drawNewPosition(stored_history[(history_length-i)]);
+            markerAnimationIndex = i;
+            markerAnimationTimer = setInterval(markerAnimationCallback, markerAnimationInterval);
+        }
+	else
+	{
+            drawNewPath(stored_history);
+            drawNewPosition(latest_point);
+            describeNewData(stored_history[(history_length-1)], stored_history[(history_length-i)]);
+        }
         describeNewData(stored_history[(history_length-1)], stored_history[(history_length-i)]);
-    }
-    if (typeof(Storage) !== "undefined") {
-        localStorage.history = JSON.stringify(stored_history);
-        localStorage.callsign = JSON.stringify(stored_callsign);
-        localStorage.date = JSON.stringify(stored_date);
+        if (typeof(Storage) !== "undefined") {
+            localStorage.history = JSON.stringify(stored_history);
+            localStorage.callsign = JSON.stringify(stored_callsign);
+            localStorage.date = JSON.stringify(stored_date);
+        }
     }
 }
 
@@ -283,13 +317,20 @@ function drawNewPath(data)
     }
     path_latlngs = [];
     data.forEach(function(item, index) {
-      path_latlngs.push([(item[3]/10000000),(item[4]/10000000)]);
+        path_latlngs.push([(item[3]/10000000),(item[4]/10000000)]);
     });
     payload_path = L.polyline(path_latlngs, {color: 'red'}).addTo(map);
 }
 
+function appendPathPoint(data)
+{
+    //path_latlngs.push([(data[3]/10000000),(data[4]/10000000)]);
+    payload_path.addLatLng([(data[3]/10000000),(data[4]/10000000)]);
+}
+
 function drawNewPosition(point_line)
 {
+    console.log("New Position render: "+(point_line[3]/10000000)+","+(point_line[4]/10000000));
     if(payload_position)
     {
         payload_position.remove();
