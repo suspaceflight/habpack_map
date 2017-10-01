@@ -1,19 +1,15 @@
+var fs = require("fs");
 var http = require('http');
 var io = require('socket.io')(3000);
 var msgpack = require('msgpack');
 
 //var payload_id = "8d79cfdd19c844b7793d5bab624b7e10";
+var payload_name = "SFSU";
 var payload_id = "af8ad89b61635db9615f5e2674e0a318";
 // CHANGE THIS FOR FLIGHT DAY
 var habitat_interval = 1; // seconds
-var days_history = 5;
-//var habitat_test_options = {
-//  host: 'habitat.habhub.org',
-//  path: '/habitat/_design/payload_telemetry/_view/payload_time?startkey=[%228d79cfdd19c844b7793d5bab624b7e10%22,[]]&endkey=[%228d79cfdd19c844b7793d5bab624b7e10%22]&include_docs=True&descending=True'
-//};
+var days_history = 4;
 
-//var test_1 = "igCnUEFZSU9BRAFWAs4AATMuA5POHlzQFNL/LNjzDQQLKAUyADwBPQE+k5YEBQUDDACWAwYEBBMAlgAAAAAAAA==";
-//var test_2 = "igCnUEFZSU9BRAECAkIDk84eXNTH0v8s32gaBBAoBTIAPAA9Aj6Tlf4C/v38lQUECgkPlQH28+bn";
 
 Array.prototype.extend = function (other_array) {
     other_array.forEach(function(v) {this.push(v)}, this);    
@@ -43,6 +39,10 @@ if (!Array.prototype.filter)
 
 function habpack_decode(habitat_key,habpack_base64) {
     var hb_string = msgpack.unpack(Buffer.from(habpack_base64, 'base64'));
+    if(typeof(hb_string)=="undefined")
+    {
+        return;
+    }
     var start_pos = hb_string[3];
     var latlon_scaling = Math.pow(2,hb_string[60]);
     var alt_scaling = Math.pow(2,hb_string[61]);
@@ -73,16 +73,24 @@ function habpack_decode(habitat_key,habpack_base64) {
                 //uplink_num
             ]
         );
+    var temp_time = seconds_utc;
+    var temp_lat = start_pos[0];
+    var temp_lon = start_pos[1];
+    var temp_alt = start_pos[2];
     for(var i=0;i<diffs_length;i++)
     {
+        temp_time+=(i/5);
+        temp_lat+=(diff_lats[i]*latlon_scaling);
+        temp_lon+=(diff_lons[i]*latlon_scaling);
+        temp_alt+=((diff_alts[i]*alt_scaling)/1000);
         output.data.push(
             [
                 habitat_key,
                 packet_counter,
-                seconds_utc,
-                start_pos[0]+(diff_lats[i]*latlon_scaling),
-                start_pos[1]+(diff_lons[i]*latlon_scaling),
-                start_pos[2]+((diff_alts[i]*alt_scaling)/1000),
+                temp_time.toFixed(0),
+                temp_lat,
+                temp_lon,
+                temp_alt,
                 satellites_num,
                 battery_mv,
                 //uplink_num
@@ -105,7 +113,7 @@ io.on('connection', function (socket) {
     socket.on('history_full', function()
     {
         console.log('Request for all history.');
-        socket.emit('full_history', {callsign: payload_callsign, date: startup_date, history: payload_data});
+        socket.emit('full_history', {date: startup_date, history: payload_data});
     });
 
     socket.on('history_since', function (data) {
@@ -114,7 +122,7 @@ io.on('connection', function (socket) {
             return (item[0] > data.latest_key);
         }
         console.log('Request for partial history.');
-        socket.emit('partial_history', {callsign: payload_callsign, date: startup_date, history: payload_data.filter(filterKey)});
+        socket.emit('partial_history', {date: startup_date, history: payload_data.filter(filterKey)});
     });
 });
 
@@ -127,12 +135,15 @@ function habitat_http_sync(cb) {
             });
             response.on('end', function () {
                 var data = JSON.parse(str);
+                if(typeof(data)=="undefined") return;
                 data.rows.forEach(function(telem_doc)
                 {
                     //console.log(telem_doc.doc.data.habpack);
                     //console.log(msgpack.decode(base64ToArrayBuffer(telem_doc.doc.data.habpack)));
                     //console.log(habpack_decode(telem_doc.doc.data.habpack));
-                    habpack_decode(telem_doc.key[1],telem_doc.doc.data.habpack).data.forEach(function(string_data)
+                    var hb_data = habpack_decode(telem_doc.key[1],telem_doc.doc.data.habpack);
+                    if(typeof(hb_data)=="undefined") return;
+                    hb_data.data.forEach(function(string_data)
                     {
                         payload_data.push(string_data);
                     });
@@ -155,6 +166,7 @@ var payload_data = [];
 
 var latest_key = (Math.floor(Date.now() / 1000)) - ((24*3600)*days_history);
 
+/* Habitat polling, broadcasts any new data */
 setInterval(function()
 {
     if(!habitat_http_busy)
@@ -179,12 +191,110 @@ setInterval(function()
                     //console.log(payload_data);
                     var new_data = payload_data.filter(filterKey);
                     console.log("Got "+new_data.length+" rows of new payload data!");
-                    io.emit("partial_history",{history: new_data});
+                    io.emit("partial_history",{date: startup_date, history: new_data});
+                    generate_kml();
             }
             habitat_http_busy = 0;
         });
     }
 },habitat_interval*1000);
+
+var kml_data = "";
+var kml_header = `<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://earth.google.com/kml/2.0">
+<Document>
+  <name>Track</name>
+  <Style id="balloon">
+    <IconStyle>
+      <scale>2</scale>
+      <Icon>
+      <href>https://susf.philcrump.co.uk/static/images/balloon-red.png</href>
+      </Icon>
+     <hotSpot x="0.5"  y="0" xunits="fraction" yunits="fraction"/>
+     </IconStyle>
+  </Style>
+`;
+
+/* KML Generation */
+function generate_kml()
+{
+    var payload_data_len = payload_data.length;
+    if(payload_data_len!=0)
+    {
+        console.log("Generating KML..");
+
+        var last_position = payload_data[payload_data_len-1];
+        var last_date = new Date(last_position[0]*1000);
+
+        kml_data = kml_header;
+        kml_data+="<Folder>\n";
+        kml_data+="<name>"+payload_name+"</name>\n";
+        kml_data+="<Placemark>\n";
+        kml_data+="<description><![CDATA[<b>Vehicle:</b> "+payload_name+"<br /><b>Time:</b> "+last_date.toLocaleDateString()+" "+last_date.toLocaleTimeString()+"<br /><b>Position:</b>"+(last_position[3]/10000000)+","+(last_position[4]/10000000)+"<br /><b>Altitude:</b> "+last_position[5]+" m<br /></br>]]></description>\n";
+        kml_data+="<name>"+payload_name+"</name>\n";
+        kml_data+="<LookAt>\n";
+        kml_data+=" <longitude>"+(last_position[4]/10000000)+"</longitude>\n";
+        kml_data+=" <latitude>"+(last_position[3]/10000000)+"</latitude>\n";
+        kml_data+=" <altitude>"+last_position[5]+"</altitude>\n";
+        kml_data+=" <altitudeMode>absolute</altitudeMode>\n";
+        kml_data+=" <range>20000</range>\n";
+        kml_data+=" <tilt>25</tilt>\n";
+        kml_data+=" <heading>0</heading>\n";
+        kml_data+="</LookAt>\n";
+        kml_data+="<visibility>1</visibility>\n";
+        kml_data+="<styleUrl>#balloon</styleUrl>\n";
+        kml_data+="<Point>\n";
+        kml_data+=" <extrude>0</extrude>\n";
+        kml_data+="  <altitudeMode>absolute</altitudeMode>\n";
+        kml_data+="  <coordinates>"+(last_position[4]/10000000)+","+(last_position[3]/10000000)+","+last_position[5]+"</coordinates>\n";
+        kml_data+="</Point>\n";
+        kml_data+="</Placemark>\n";
+        var i = 0;
+        var segment_id = 1;
+        while(i<payload_data_len)
+        {
+            kml_data+="<Placemark>\n";
+            kml_data+="<name>Track Segment #"+segment_id+"</name>\n";
+            kml_data+="<visibility>1</visibility>\n";
+            kml_data+="<Style>\n";
+            kml_data+=" <LineStyle>\n";
+            kml_data+="  <color>ff0000ff</color>\n";
+            kml_data+="  <width>4</width>\n";
+            kml_data+=" </LineStyle>\n";
+            kml_data+=" <PolyStyle>\n";
+            kml_data+="  <color>7fffffff</color>\n";
+            kml_data+=" </PolyStyle>\n";
+            kml_data+="</Style>\n";
+            kml_data+="<LineString>\n";
+            //kml_data+=" <extrude>1</extrude>\n";
+            kml_data+=" <tessellate>1</tessellate>\n";
+            kml_data+=" <altitudeMode>absolute</altitudeMode>\n";
+            kml_data+=" <coordinates>\n";
+            var j=0;
+            while(j<15000 && i<payload_data_len)
+            {
+                kml_data+=(payload_data[i][4]/10000000)+","+(payload_data[i][3]/10000000)+","+payload_data[i][5]+"\n";
+                i++;
+                j++;
+            }
+            kml_data+="</coordinates>\n";
+            kml_data+="</LineString>\n";
+            kml_data+="</Placemark>\n";
+            segment_id++;
+        }
+        kml_data+=` </Folder>
+        </Document>
+         </kml>
+        `;
+
+        fs.writeFile("/srv/susf/payload.kml", kml_data, function(err)
+        {
+            if(err) {
+                return console.log(err);
+            }
+            console.log("KML Saved.");
+        }); 
+    }
+}
 
 startup_date = Date.now();
 var payload_callsign = "";

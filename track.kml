@@ -1,0 +1,14 @@
+<kml xmlns="http://earth.google.com/kml/2.0" >
+  <Document>
+    <NetworkLink>
+      <name>SUSF HABpack Tracker (GE)</name>
+      <description>Live tracking of HABpack HABs via Google Earth</description>
+      <Url>
+      <href>https://susf.philcrump.co.uk/payload.kml</href>
+        <refreshMode>onInterval</refreshMode>
+        <refreshInterval>10</refreshInterval>
+      </Url>
+    </NetworkLink>
+  </Document>
+</kml>
+
